@@ -78,16 +78,80 @@
 
     <div class="io-areas">
         <div>
-            <label for="baseURL">Base API:</label><br>
-            <input id="baseURL" name="Instruction" value="http://localhost:8080"></textarea>
+            <label for="responseText">Response:</label><br>
+            <textarea id="responseText" style="height: 20em; width: 40em" name="Response" readonly placeholder="Server response will appear here..."></textarea>
         </div>
         <div>
             <label for="instructionText">Instruction:</label><br>
             <textarea id="instructionText" style="height: 2em; width: 40em" name="Instruction"></textarea>
         </div>
         <div>
-            <label for="responseText">Response:</label><br>
-            <textarea id="responseText" style="height: 2em; width: 40em" name="Response" readonly placeholder="Server response will appear here..."></textarea>
+            <label for="systemText">System Instruction:</label><br>
+            <textarea id="systemText" style="height: 2em; width: 40em" name="SystemInstruction">
+You are a expert in video analysis. Answer the user's questions based on the video provided.
+If you cannot see anything in the image, say "I cannot see anything in the image."
+Analyze the live camera feed and describe the visual aspects, focusing on objects, activities, lighting, camera, color grading, mood, and aesthetic style.
+For example, you can tell the details about the scene like what the person is doing and other scene description such as:
+1. Person's action:
+- What is the person doing?
+- Any specific activity or task?
+- what is the mood of the person?
+- Any interaction with objects or environment?
+
+2. Objects:
+- What are the objects in the scene?
+- How are they positioned?
+- What is the purpose of the objects?
+- What is the relationship between the objects?
+
+3. Environment:
+- What is the environment?
+- How is the environment positioned?
+- What is the purpose of the environment?
+- What is the relationship between the environment and the objects?
+
+4. Lighting:
+- What is the lighting?
+- How is the lighting positioned?
+- Primary light source?
+- Natural or artificial?
+- Shadows and their effect?
+- Backlighting or fill light?
+- Light directionality?
+
+5. Camera:
+- Camera angle?
+- Camera movement?
+- Depth of field?
+- Composition?
+
+6. Color Grading:
+- Color temperature?
+- Color contrasts?
+- Saturation level?
+- Any specific grading style?
+
+7. Mood:
+- Emotional tone of the scene?
+- How lighting and color affect mood?
+- Any emotional cues?
+
+8. Aesthetic Style:
+- Overall aesthetic style?
+- Visual themes present?
+- Genre influence?
+- Noticeable visual effects or textures?
+
+user question:
+            </textarea>
+        </div>
+        <div>
+            <label for="baseURL">Base API:</label><br>
+            <input id="baseURL" name="Instruction" value="http://localhost:1234"></textarea>
+        </div>
+        <div>
+            <label for="model">Model:</label><br>
+            <input id="model" name="VLM" value="smolvlm-500m-instruct"></textarea>
         </div>
     </div>
 
@@ -96,14 +160,15 @@
         <select id="intervalSelect" name="Interval between 2 requests">
             <option value="100">100ms</option>
             <option value="250">250ms</option>
-            <option value="500" selected>500ms</option>
+            <option value="500">500ms</option>
             <option value="1000">1s</option>
-            <option value="2000">2s</option>
+            <option value="2000" selected>2s</option>
         </select>
         <button id="startButton" class="start">Start</button>
     </div>
 
     <script>
+        
         const video = document.getElementById('videoFeed');
         const canvas = document.getElementById('canvas');
         const baseURL = document.getElementById('baseURL');
@@ -111,9 +176,10 @@
         const responseText = document.getElementById('responseText');
         const intervalSelect = document.getElementById('intervalSelect');
         const startButton = document.getElementById('startButton');
+        const model = document.getElementById('model');
+        const systemText =document.getElementById('systemText');        
 
-        instructionText.value = "What do you see?"; // default instruction
-
+        instructionText.value = "What do you see? "; // default instruction
         let stream;
         let intervalId;
         let isProcessing = false;
@@ -121,12 +187,16 @@
         // Returns response text (string)
         async function sendChatCompletionRequest(instruction, imageBase64URL) {
             const response = await fetch(`${baseURL.value}/v1/chat/completions`, {
-                method: 'POST',
+                method: 'POST',                
                 headers: {
-                    'Content-Type': 'application/json'
-                },
+                'Access-Control-Allow-Origin': '*', // Or specify allowed origins
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Content-Type': 'application/json'
+                },  
                 body: JSON.stringify({
-                    max_tokens: 100,
+                    model: model.value, //"smolvlm-500m-instruct",
+                    max_tokens: 250,
                     messages: [
                         { role: 'user', content: [
                             { type: 'text', text: instruction },
@@ -173,13 +243,13 @@
         async function sendData() {
             if (!isProcessing) return; // Ensure we don't have overlapping requests if processing takes longer than interval
 
-            const instruction = instructionText.value;
+            const instruction = systemText.value + instructionText.value;
             const imageBase64URL = captureImage();
 
             if (!imageBase64URL) {
                 responseText.value = "Failed to capture image. Stream might not be active.";
                 // Optionally stop processing if image capture fails consistently
-                // handleStop();
+                handleStop();
                 return;
             }
 
@@ -208,7 +278,7 @@
             startButton.classList.remove('start');
             startButton.classList.add('stop');
 
-            instructionText.disabled = true;
+            systemText.disabled = true;
             intervalSelect.disabled = true;
 
             responseText.value = "Processing started...";
@@ -232,7 +302,7 @@
             startButton.classList.remove('stop');
             startButton.classList.add('start');
 
-            instructionText.disabled = false;
+            systemText.disabled = false;
             intervalSelect.disabled = false;
             if (responseText.value.startsWith("Processing started...")) {
                 responseText.value = "Processing stopped.";
