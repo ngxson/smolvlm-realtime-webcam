@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera Interaction App</title>
+    <title>SmolVLM Camera Demo - Performance Optimized</title>
     <style>
         body {
             font-family: sans-serif;
@@ -14,7 +14,7 @@
             padding: 20px;
             background-color: #f0f0f0;
         }
-        .controls, .io-areas {
+        .controls, .io-areas, .performance-metrics {
             display: flex;
             gap: 10px;
             align-items: center;
@@ -22,25 +22,61 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 800px;
         }
-        .io-areas {
+        .io-areas, .performance-metrics {
             flex-direction: column;
             align-items: stretch;
         }
         textarea {
-            width: 300px;
+            width: 100%;
             height: 80px;
             padding: 8px;
             border: 1px solid #ccc;
             border-radius: 4px;
             font-size: 14px;
+            resize: vertical;
         }
-        #videoFeed {
+        .video-container {
+            position: relative;
             width: 480px;
             height: 360px;
+        }
+        #videoFeed {
+            width: 100%;
+            height: 100%;
             border: 2px solid #333;
             background-color: #000;
             border-radius: 8px;
+        }
+        #loadingOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            display: none;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         #startButton {
             padding: 10px 20px;
@@ -56,10 +92,32 @@
         #startButton.stop {
             background-color: #dc3545; /* Red */
         }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-connected {
+            background-color: #28a745;
+        }
+        .status-disconnected {
+            background-color: #dc3545;
+        }
+        .status-connecting {
+            background-color: #ffc107;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
         label {
             font-weight: bold;
         }
-        select {
+        select, input {
             padding: 8px;
             border-radius: 4px;
             border: 1px solid #ccc;
@@ -67,85 +125,397 @@
         .hidden {
             display: none;
         }
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+        .controls-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .status-display {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+        }
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+        .metric-value {
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Camera Interaction App</h1>
+    <h1>SmolVLM Camera Demo - Performance Optimized</h1>
 
-    <video id="videoFeed" autoplay playsinline></video>
+    <div class="video-container">
+        <video id="videoFeed" autoplay playsinline></video>
+        <div id="loadingOverlay">
+            <div class="spinner"></div>
+            <span>Processing...</span>
+        </div>
+    </div>
     <canvas id="canvas" class="hidden"></canvas> <!-- For capturing frames -->
 
     <div class="io-areas">
         <div>
             <label for="baseURL">Base API:</label><br>
-            <input id="baseURL" name="Instruction" value="http://localhost:8080"></textarea>
+            <input id="baseURL" type="text" style="width: 100%" value="http://localhost:8080">
         </div>
         <div>
             <label for="instructionText">Instruction:</label><br>
-            <textarea id="instructionText" style="height: 2em; width: 40em" name="Instruction"></textarea>
+            <textarea id="instructionText" name="Instruction"></textarea>
         </div>
         <div>
             <label for="responseText">Response:</label><br>
-            <textarea id="responseText" style="height: 2em; width: 40em" name="Response" readonly placeholder="Server response will appear here..."></textarea>
+            <textarea id="responseText" name="Response" readonly placeholder="Server response will appear here..."></textarea>
         </div>
     </div>
 
     <div class="controls">
-        <label for="intervalSelect">Interval between 2 requests:</label>
-        <select id="intervalSelect" name="Interval between 2 requests">
-            <option value="100">100ms</option>
-            <option value="250">250ms</option>
-            <option value="500" selected>500ms</option>
-            <option value="1000">1s</option>
-            <option value="2000">2s</option>
-        </select>
-        <button id="startButton" class="start">Start</button>
+        <div class="controls-row">
+            <div class="controls-group">
+                <label for="intervalSelect">Interval:</label>
+                <select id="intervalSelect" name="Interval between 2 requests">
+                    <option value="100">100ms</option>
+                    <option value="250">250ms</option>
+                    <option value="500" selected>500ms</option>
+                    <option value="1000">1s</option>
+                    <option value="2000">2s</option>
+                </select>
+            </div>
+            
+            <div class="controls-group">
+                <label for="imageQualitySelect">Image Quality:</label>
+                <select id="imageQualitySelect" name="Image Quality">
+                    <option value="auto" selected>Auto</option>
+                    <option value="0.3">Low (30%)</option>
+                    <option value="0.5">Medium (50%)</option>
+                    <option value="0.7">High (70%)</option>
+                    <option value="0.9">Ultra (90%)</option>
+                </select>
+            </div>
+            
+            <div class="controls-group">
+                <label for="resolutionSelect">Resolution:</label>
+                <select id="resolutionSelect" name="Resolution">
+                    <option value="1">Full</option>
+                    <option value="0.75">75%</option>
+                    <option value="0.5" selected>50%</option>
+                    <option value="0.25">25%</option>
+                </select>
+            </div>
+            
+            <div class="status-display">
+                <span class="status-indicator" id="connectionStatus"></span>
+                <span id="connectionStatusText">Disconnected</span>
+            </div>
+        </div>
+        
+        <div class="controls-row">
+            <div class="controls-group">
+                <label for="maxRetriesInput">Max Retries:</label>
+                <input type="number" id="maxRetriesInput" min="0" max="10" value="3">
+            </div>
+            
+            <div class="controls-group">
+                <label for="requestTimeoutInput">Timeout (ms):</label>
+                <input type="number" id="requestTimeoutInput" min="1000" max="30000" value="10000">
+            </div>
+            
+            <button id="startButton" class="start">Start</button>
+        </div>
+    </div>
+    
+    <div class="performance-metrics">
+        <h3>Performance Metrics</h3>
+        <div class="metric-row">
+            <span>Average Response Time:</span>
+            <span class="metric-value" id="avgResponseTime">0 ms</span>
+        </div>
+        <div class="metric-row">
+            <span>Last Response Time:</span>
+            <span class="metric-value" id="lastResponseTime">0 ms</span>
+        </div>
+        <div class="metric-row">
+            <span>Request Success Rate:</span>
+            <span class="metric-value" id="successRate">0%</span>
+        </div>
+        <div class="metric-row">
+            <span>Current Image Quality:</span>
+            <span class="metric-value" id="currentImageQuality">0%</span>
+        </div>
+        <div class="metric-row">
+            <span>Current Image Size:</span>
+            <span class="metric-value" id="currentImageSize">0 KB</span>
+        </div>
+        <div class="metric-row">
+            <span>Requests Per Second:</span>
+            <span class="metric-value" id="requestsPerSecond">0</span>
+        </div>
     </div>
 
     <script>
+        // DOM Elements
         const video = document.getElementById('videoFeed');
         const canvas = document.getElementById('canvas');
         const baseURL = document.getElementById('baseURL');
         const instructionText = document.getElementById('instructionText');
         const responseText = document.getElementById('responseText');
         const intervalSelect = document.getElementById('intervalSelect');
+        const imageQualitySelect = document.getElementById('imageQualitySelect');
+        const resolutionSelect = document.getElementById('resolutionSelect');
+        const maxRetriesInput = document.getElementById('maxRetriesInput');
+        const requestTimeoutInput = document.getElementById('requestTimeoutInput');
         const startButton = document.getElementById('startButton');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectionStatusText = document.getElementById('connectionStatusText');
+        
+        // Performance metrics elements
+        const avgResponseTimeEl = document.getElementById('avgResponseTime');
+        const lastResponseTimeEl = document.getElementById('lastResponseTime');
+        const successRateEl = document.getElementById('successRate');
+        const currentImageQualityEl = document.getElementById('currentImageQuality');
+        const currentImageSizeEl = document.getElementById('currentImageSize');
+        const requestsPerSecondEl = document.getElementById('requestsPerSecond');
 
-        instructionText.value = "What do you see?"; // default instruction
+        // Set default values
+        instructionText.value = "What do you see in this image? Describe all objects.";
 
+        // Global variables
         let stream;
         let intervalId;
         let isProcessing = false;
+        let lastRequestTime = 0;
+        let activeRequest = null;
+        let connectionCheckInterval;
+        let serverAvailable = false;
+        let currentController = null;
+        let retryCount = 0;
+        let reconnectTimeout = null;
+        let requestBackoff = 1000; // Starting backoff time in ms
+        
+        // Performance tracking variables
+        let totalRequests = 0;
+        let successfulRequests = 0;
+        let totalResponseTime = 0;
+        let lastResponseTime = 0;
+        let responseTimes = [];
+        let currentQuality = 0.5; // Start with medium quality
+        let adaptiveQualityThreshold = 2000; // ms, adjust quality if response takes longer than this
+        let requestsLastSecond = 0;
+        let requestsTimer = null;
+
+        // Connection status management
+        function updateConnectionStatus(status) {
+            connectionStatus.classList.remove('status-connected', 'status-disconnected', 'status-connecting');
+            
+            switch (status) {
+                case 'connected':
+                    connectionStatus.classList.add('status-connected');
+                    connectionStatusText.textContent = 'Connected';
+                    serverAvailable = true;
+                    break;
+                case 'disconnected':
+                    connectionStatus.classList.add('status-disconnected');
+                    connectionStatusText.textContent = 'Disconnected';
+                    serverAvailable = false;
+                    break;
+                case 'connecting':
+                    connectionStatus.classList.add('status-connecting');
+                    connectionStatusText.textContent = 'Connecting...';
+                    serverAvailable = false;
+                    break;
+            }
+        }
+
+        // Check server connection
+        async function checkServerConnection() {
+            try {
+                updateConnectionStatus('connecting');
+                
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Connection timeout')), 5000);
+                });
+                
+                const fetchPromise = fetch(`${baseURL.value}/v1/models`);
+                
+                await Promise.race([fetchPromise, timeoutPromise]);
+                
+                updateConnectionStatus('connected');
+                if (retryCount > 0) {
+                    retryCount = 0;
+                    requestBackoff = 1000;
+                }
+            } catch (err) {
+                console.error("Server connection error:", err);
+                updateConnectionStatus('disconnected');
+                
+                if (isProcessing && retryCount < parseInt(maxRetriesInput.value)) {
+                    retryCount++;
+                    const backoffTime = requestBackoff * Math.pow(1.5, retryCount - 1);
+                    requestBackoff = Math.min(backoffTime, 30000); // Cap at 30 seconds
+                    
+                    console.log(`Reconnection attempt ${retryCount} in ${requestBackoff}ms`);
+                    
+                    clearTimeout(reconnectTimeout);
+                    reconnectTimeout = setTimeout(checkServerConnection, requestBackoff);
+                }
+            }
+        }
+
+        // Start checking server connection when page loads
+        function initConnectionCheck() {
+            checkServerConnection();
+            connectionCheckInterval = setInterval(checkServerConnection, 30000); // Check every 30 seconds
+        }
 
         // Returns response text (string)
         async function sendChatCompletionRequest(instruction, imageBase64URL) {
-            const response = await fetch(`${baseURL.value}/v1/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    max_tokens: 100,
-                    messages: [
-                        { role: 'user', content: [
-                            { type: 'text', text: instruction },
-                            { type: 'image_url', image_url: {
-                                url: imageBase64URL,
-                            } }
-                        ] },
-                    ]
-                })
-            });
-            if (!response.ok) {
-                const errorData = await response.text();
-                return `Server error: ${response.status} - ${errorData}`;
+            if (!serverAvailable) {
+                throw new Error("Server not available");
             }
-            const data = await response.json();
-            return data.choices[0].message.content;
+            
+            showLoading(true);
+            
+            // Create an AbortController to handle timeouts
+            currentController = new AbortController();
+            const signal = currentController.signal;
+            
+            // Create timeout that will abort the fetch request
+            const timeoutId = setTimeout(() => {
+                if (currentController) {
+                    currentController.abort();
+                }
+            }, parseInt(requestTimeoutInput.value));
+            
+            const requestStartTime = performance.now();
+            
+            try {
+                const response = await fetch(`${baseURL.value}/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        max_tokens: 100,
+                        messages: [
+                            { role: 'user', content: [
+                                { type: 'text', text: instruction },
+                                { type: 'image_url', image_url: {
+                                    url: imageBase64URL,
+                                } }
+                            ] },
+                        ]
+                    }),
+                    signal: signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`Server error: ${response.status} - ${errorData}`);
+                }
+                
+                const data = await response.json();
+                
+                // Calculate response time
+                const requestEndTime = performance.now();
+                lastResponseTime = requestEndTime - requestStartTime;
+                updatePerformanceMetrics(true);
+                
+                return data.choices[0].message.content;
+            } catch (err) {
+                // Handle timeout or other errors
+                if (err.name === 'AbortError') {
+                    updatePerformanceMetrics(false);
+                    throw new Error('Request timed out');
+                }
+                
+                updatePerformanceMetrics(false);
+                throw err;
+            } finally {
+                showLoading(false);
+                currentController = null;
+            }
         }
 
-        // 1. Ask for camera permission on load
+        // Update performance metrics
+        function updatePerformanceMetrics(success) {
+            totalRequests++;
+            
+            if (success) {
+                successfulRequests++;
+                totalResponseTime += lastResponseTime;
+                responseTimes.push(lastResponseTime);
+                
+                // Keep only the last 10 response times for average calculation
+                if (responseTimes.length > 10) {
+                    responseTimes.shift();
+                }
+                
+                // Adaptive quality adjustment based on response time
+                if (imageQualitySelect.value === 'auto') {
+                    adjustQualityBasedOnPerformance();
+                }
+            }
+            
+            // Update metrics display
+            const avgTime = responseTimes.length > 0 ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length : 0;
+            avgResponseTimeEl.textContent = `${Math.round(avgTime)} ms`;
+            lastResponseTimeEl.textContent = `${Math.round(lastResponseTime)} ms`;
+            successRateEl.textContent = `${Math.round((successfulRequests / totalRequests) * 100)}%`;
+            currentImageQualityEl.textContent = `${Math.round(currentQuality * 100)}%`;
+            requestsLastSecond++;
+        }
+
+        // Track requests per second
+        function initRequestsPerSecondCounter() {
+            requestsTimer = setInterval(() => {
+                requestsPerSecondEl.textContent = requestsLastSecond.toString();
+                requestsLastSecond = 0;
+            }, 1000);
+        }
+
+        // Adaptive quality adjustment
+        function adjustQualityBasedOnPerformance() {
+            const avgTime = responseTimes.length > 0 ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length : 0;
+            
+            // If response time is too high, reduce quality
+            if (avgTime > adaptiveQualityThreshold) {
+                currentQuality = Math.max(0.3, currentQuality - 0.1);
+            } 
+            // If response time is good, slowly increase quality
+            else if (avgTime < adaptiveQualityThreshold / 2 && currentQuality < 0.9) {
+                currentQuality = Math.min(0.9, currentQuality + 0.05);
+            }
+            
+            // Update the UI display
+            currentImageQualityEl.textContent = `${Math.round(currentQuality * 100)}%`;
+        }
+
+        // Show/hide loading overlay
+        function showLoading(show) {
+            loadingOverlay.style.display = show ? 'flex' : 'none';
+        }
+
+        // Initialize camera
         async function initCamera() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
@@ -158,87 +528,161 @@
             }
         }
 
+        // Capture and resize image
         function captureImage() {
             if (!stream || !video.videoWidth) {
                 console.warn("Video stream not ready for capture.");
                 return null;
             }
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            
+            // Get original dimensions
+            const originalWidth = video.videoWidth;
+            const originalHeight = video.videoHeight;
+            
+            // Calculate new dimensions based on resolution setting
+            const scaleFactor = parseFloat(resolutionSelect.value);
+            const newWidth = Math.floor(originalWidth * scaleFactor);
+            const newHeight = Math.floor(originalHeight * scaleFactor);
+            
+            // Set canvas dimensions
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+            
+            // Draw resized image to canvas
             const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            return canvas.toDataURL('image/jpeg', 0.8); // Use JPEG for smaller size, 0.8 quality
+            context.drawImage(video, 0, 0, newWidth, newHeight);
+            
+            // Get quality setting
+            let quality = currentQuality;
+            if (imageQualitySelect.value !== 'auto') {
+                quality = parseFloat(imageQualitySelect.value);
+            }
+            
+            // Convert to base64 with specified quality
+            const imageBase64 = canvas.toDataURL('image/jpeg', quality);
+            
+            // Update image size display
+            const approximateSize = Math.round((imageBase64.length - 22) * 0.75 / 1024);
+            currentImageSizeEl.textContent = `${approximateSize} KB`;
+            
+            return imageBase64;
         }
 
-        async function sendData() {
-            if (!isProcessing) return; // Ensure we don't have overlapping requests if processing takes longer than interval
-
-            const instruction = instructionText.value;
-            const imageBase64URL = captureImage();
-
-            if (!imageBase64URL) {
-                responseText.value = "Failed to capture image. Stream might not be active.";
-                // Optionally stop processing if image capture fails consistently
-                // handleStop();
+        // Process request with backoff and throttling
+        async function processRequest() {
+            if (!isProcessing || !serverAvailable) return;
+            
+            // Check if we need to throttle requests (ensure minimum interval between requests)
+            const now = Date.now();
+            const timeSinceLastRequest = now - lastRequestTime;
+            const minInterval = parseInt(intervalSelect.value);
+            
+            if (timeSinceLastRequest < minInterval) {
+                // Schedule next request after the minimum interval has passed
+                setTimeout(processRequest, minInterval - timeSinceLastRequest);
                 return;
             }
-
-            const payload = {
-                instruction: instruction,
-                imageBase64URL: imageBase64URL
-            };
-
-            try {
-                const response = await sendChatCompletionRequest(payload.instruction, payload.imageBase64URL);
-                responseText.value = response;
-            } catch (error) {
-                console.error('Error sending data:', error);
-                responseText.value = `Error: ${error.message}`;
+            
+            // If there's an active request, don't send another one
+            if (activeRequest) return;
+            
+            lastRequestTime = now;
+            
+            const instruction = instructionText.value;
+            const imageBase64URL = captureImage();
+            
+            if (!imageBase64URL) {
+                responseText.value = "Failed to capture image. Stream might not be active.";
+                return;
             }
+            
+            // Create and track the active request
+            activeRequest = sendChatCompletionRequest(instruction, imageBase64URL)
+                .then(response => {
+                    responseText.value = response;
+                })
+                .catch(error => {
+                    console.error('Error sending data:', error);
+                    responseText.value = `Error: ${error.message}`;
+                    
+                    // If it was a server error, check connection
+                    if (error.message.includes('Server error') || error.message.includes('Request timed out')) {
+                        checkServerConnection();
+                    }
+                })
+                .finally(() => {
+                    activeRequest = null;
+                    
+                    // Schedule next request
+                    if (isProcessing) {
+                        setTimeout(processRequest, parseInt(intervalSelect.value));
+                    }
+                });
         }
 
+        // Start processing
         function handleStart() {
             if (!stream) {
                 responseText.value = "Camera not available. Cannot start.";
                 alert("Camera not available. Please grant permission first.");
                 return;
             }
+            
             isProcessing = true;
             startButton.textContent = "Stop";
             startButton.classList.remove('start');
             startButton.classList.add('stop');
-
+            
             instructionText.disabled = true;
             intervalSelect.disabled = true;
-
+            imageQualitySelect.disabled = true;
+            resolutionSelect.disabled = true;
+            maxRetriesInput.disabled = true;
+            requestTimeoutInput.disabled = true;
+            
             responseText.value = "Processing started...";
-
-            const intervalMs = parseInt(intervalSelect.value, 10);
             
-            // Initial immediate call
-            sendData(); 
-            
-            // Then set interval
-            intervalId = setInterval(sendData, intervalMs);
+            // Check server connection before starting
+            checkServerConnection().then(() => {
+                if (serverAvailable) {
+                    // Start processing immediately
+                    processRequest();
+                    initRequestsPerSecondCounter();
+                }
+            });
         }
 
+        // Stop processing
         function handleStop() {
             isProcessing = false;
-            if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
+            
+            // Cancel any active request
+            if (currentController) {
+                currentController.abort();
+                currentController = null;
             }
+            
+            activeRequest = null;
+            
             startButton.textContent = "Start";
             startButton.classList.remove('stop');
             startButton.classList.add('start');
-
+            
             instructionText.disabled = false;
             intervalSelect.disabled = false;
+            imageQualitySelect.disabled = false;
+            resolutionSelect.disabled = false;
+            maxRetriesInput.disabled = false;
+            requestTimeoutInput.disabled = false;
+            
+            clearInterval(requestsTimer);
+            
             if (responseText.value.startsWith("Processing started...")) {
                 responseText.value = "Processing stopped.";
             }
         }
 
+        // Event listeners
         startButton.addEventListener('click', () => {
             if (isProcessing) {
                 handleStop();
@@ -247,19 +691,25 @@
             }
         });
 
-        // Initialize camera when the page loads
-        window.addEventListener('DOMContentLoaded', initCamera);
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            initCamera();
+            initConnectionCheck();
+        });
 
-        // Optional: Stop stream when page is closed/navigated away to release camera
+        // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
-            if (intervalId) {
-                clearInterval(intervalId);
+            clearInterval(connectionCheckInterval);
+            clearTimeout(reconnectTimeout);
+            clearInterval(requestsTimer);
+            
+            if (currentController) {
+                currentController.abort();
             }
         });
-
     </script>
 </body>
 </html>
