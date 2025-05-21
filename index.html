@@ -171,7 +171,7 @@
         }
 
         async function sendData() {
-            if (!isProcessing) return; // Ensure we don't have overlapping requests if processing takes longer than interval
+            if (isProcessing) return; // Ensure we don't have overlapping requests if processing takes longer than interval
 
             const instruction = instructionText.value;
             const imageBase64URL = captureImage();
@@ -188,6 +188,7 @@
                 imageBase64URL: imageBase64URL
             };
 
+	    isProcessing = true;
             try {
                 const response = await sendChatCompletionRequest(payload.instruction, payload.imageBase64URL);
                 responseText.value = response;
@@ -195,6 +196,7 @@
                 console.error('Error sending data:', error);
                 responseText.value = `Error: ${error.message}`;
             }
+	    isProcessing = false;
         }
 
         function handleStart() {
@@ -203,7 +205,6 @@
                 alert("Camera not available. Please grant permission first.");
                 return;
             }
-            isProcessing = true;
             startButton.textContent = "Stop";
             startButton.classList.remove('start');
             startButton.classList.add('stop');
@@ -223,7 +224,6 @@
         }
 
         function handleStop() {
-            isProcessing = false;
             if (intervalId) {
                 clearInterval(intervalId);
                 intervalId = null;
