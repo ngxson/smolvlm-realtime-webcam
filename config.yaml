@@ -1,0 +1,28 @@
+models:
+  smolvlm:
+    name: "SmolVLM-500M-Instruct"
+    model_path: "./models/smolvlm.gguf"
+    device: "cpu" # Change to "cuda" or "metal" if available
+    prompt_template: "User: {instruction}\nImage: {image_token}\nAssistant:"
+    vision_input_interval: 500
+    tokenizer_path: "./models/tokenizer.model"
+    max_tokens: 512
+    temperature: 0.7
+
+  demo:
+    name: "Demo Model (Simulated)"
+    model_path: ""
+    device: "cpu"
+    prompt_template: "User: {instruction}\nAssistant:"
+    vision_input_interval: 500
+    tokenizer_path: ""
+    max_tokens: 512
+    temperature: 0.7
+
+app:
+  default_model: "demo"
+  webcam_device: 0
+  image_resize_width: 336
+  image_resize_height: 336
+  frame_interval_ms: 500
+  log_level: "info"

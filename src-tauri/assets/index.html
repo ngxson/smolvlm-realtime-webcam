@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VLM Realtime</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1>VLM Realtime</h1>
+            <div class="model-controls">
+                <select id="modelSelect" class="model-select">
+                    <option value="">Select Model...</option>
+                </select>
+                <button id="loadModelBtn" class="btn btn-primary">Load Model</button>
+                <span id="modelStatus" class="status"></span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="webcam-section">
+                <div class="webcam-container">
+                    <video id="webcamVideo" autoplay muted playsinline></video>
+                    <canvas id="webcamCanvas" style="display: none;"></canvas>
+                    <div class="webcam-overlay">
+                        <button id="toggleWebcam" class="btn btn-secondary">Start Webcam</button>
+                        <div class="webcam-status">
+                            <span id="webcamStatus">Webcam Off</span>
+                            <span id="frameRate"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-section">
+                <div class="chat-container">
+                    <div id="chatMessages" class="chat-messages"></div>
+                    <div class="chat-input-container">
+                        <div class="input-options">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="includeWebcam" checked>
+                                Include webcam frame
+                            </label>
+                        </div>
+                        <div class="chat-input">
+                            <textarea 
+                                id="messageInput" 
+                                placeholder="Ask about what you see in the webcam or ask any question..."
+                                rows="3"
+                            ></textarea>
+                            <button id="sendBtn" class="btn btn-primary">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
