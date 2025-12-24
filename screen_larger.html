@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Screen Interaction App</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: sans-serif;
+    background-color: #f0f0f0;
+}
+
+/* ---------- Layout ---------- */
+.app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Left: Screen */
+.left {
+    width: 60%;
+    height: 100%;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#videoFeed {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Right: Controls */
+.right {
+    width: 40%;
+    height: 100%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    box-sizing: border-box;
+    gap: 12px;
+}
+
+/* ---------- UI ---------- */
+label {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+textarea, input, select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+#instructionText {
+    height: 60px;
+}
+
+#responseText {
+    flex: 1;
+    resize: none;
+}
+
+.controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+button {
+    padding: 10px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+}
+
+.start { background-color: #28a745; }
+.stop  { background-color: #dc3545; }
+
+.hidden { display: none; }
+
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- LEFT: SCREEN -->
+    <div class="left">
+        <video id="videoFeed" autoplay playsinline muted></video>
+        <canvas id="canvas" class="hidden"></canvas>
+    </div>
+
+    <!-- RIGHT: Q&A -->
+    <div class="right">
+
+        <div>
+            <label>Base API</label>
+            <input id="baseURL" value="http://localhost:8080">
+        </div>
+
+        <div>
+            <label>System Prompt</label>
+            <textarea id="systemText">You can reply with main components. Forget the details.</textarea>
+        </div>
+
+        <div>
+            <label>Instruction</label>
+            <textarea id="instructionText">Describe the computer page you see on my screen.</textarea>
+        </div>
+
+        <div style="flex:1; display:flex; flex-direction:column;">
+            <label>Response</label>
+            <textarea id="responseText" readonly placeholder="Model response..."></textarea>
+        </div>
+
+        <div class="controls">
+            <select id="intervalSelect">
+                <option value="250">250ms</option>
+                <option value="500" selected>500ms</option>
+                <option value="1000">1s</option>
+                <option value="2000">2s</option>
+            </select>
+
+            <button id="startButton" class="start">Start</button>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const video = document.getElementById('videoFeed');
+const canvas = document.getElementById('canvas');
+const baseURL = document.getElementById('baseURL');
+
+
+const systemText = document.getElementById('systemText');
+const instructionText = document.getElementById('instructionText');
+const responseText = document.getElementById('responseText');
+const intervalSelect = document.getElementById('intervalSelect');
+const startButton = document.getElementById('startButton');
+
+let stream = null;
+let intervalId = null;
+let isProcessing = false;
+
+/* -------- API -------- */
+async function sendChatCompletionRequest(systemPrompt, instruction, imageBase64URL) {
+    const response = await fetch(`${baseURL.value}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            max_tokens: 128,
+            messages: [
+            {
+                role: 'system',
+                content: [
+                    { type: 'text', text: systemPrompt },
+                    
+                ]
+            },
+            {
+                role: 'user',
+                content: [
+                    { type: 'text', text: instruction },
+                    { type: 'image_url', image_url: { url: imageBase64URL } }
+                ]
+            }]
+        })
+    });
+
+    if (!response.ok) return `Server error: ${response.status}`;
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+/* -------- Screen Capture -------- */
+async function initScreenCapture() {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30, cursor: "always" },
+        audio: false
+    });
+
+    video.srcObject = stream;
+
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+        handleStop();
+        responseText.value = "Screen sharing stopped.";
+    });
+}
+
+/* -------- Capture Frame -------- */
+function captureImage() {
+    if (!video.videoWidth) return null;
+
+    const maxWidth = 1280;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
+
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+/* -------- Loop -------- */
+async function sendData() {
+    if (!isProcessing) return;
+    const img = captureImage();
+    if (!img) return;
+
+    responseText.value = await sendChatCompletionRequest(
+        systemText.value,
+        instructionText.value,
+        img
+    );
+}
+
+/* -------- Controls -------- */
+function handleStart() {
+    isProcessing = true;
+    startButton.textContent = "Stop";
+    startButton.className = "stop";
+    instructionText.disabled = true;
+    intervalSelect.disabled = true;
+
+    sendData();
+    intervalId = setInterval(sendData, Number(intervalSelect.value));
+}
+
+function handleStop() {
+    isProcessing = false;
+    clearInterval(intervalId);
+    intervalId = null;
+
+    startButton.textContent = "Start";
+    startButton.className = "start";
+    instructionText.disabled = false;
+    intervalSelect.disabled = false;
+}
+
+startButton.onclick = () => {
+    isProcessing ? handleStop() : handleStart();
+};
+
+window.addEventListener('DOMContentLoaded', initScreenCapture);
+</script>
+
+</body>
+</html>

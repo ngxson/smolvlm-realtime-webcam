@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Screen Interaction App</title>
+
+<style>
+body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background-color: #f0f0f0;
+}
+.controls, .io-areas {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background-color: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.io-areas {
+    flex-direction: column;
+    align-items: stretch;
+}
+textarea, input {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+#videoFeed {
+    width: 640px;
+    height: 360px;
+    border: 2px solid #333;
+    background-color: #000;
+    border-radius: 8px;
+}
+#startButton {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    color: white;
+}
+#startButton.start { background-color: #28a745; }
+#startButton.stop { background-color: #dc3545; }
+.hidden { display: none; }
+label { font-weight: bold; }
+select {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🖥 Screen Interaction App</h1>
+
+<video id="videoFeed" autoplay playsinline muted></video>
+<canvas id="canvas" class="hidden"></canvas>
+
+<div class="io-areas">
+    <div>
+        <label>Base API</label><br/>
+        <input id="baseURL" value="http://localhost:8080" style="width: 40em;">
+    </div>
+
+    <div>
+        <label>Instruction</label><br/>
+        <textarea id="instructionText" style="height: 2em; width: 40em;">
+What do you see on my screen?
+        </textarea>
+    </div>
+
+    <div>
+        <label>Response</label><br/>
+        <textarea id="responseText"
+                  style="height: 20em; width: 40em"
+                  readonly
+                  placeholder="Model response..."></textarea>
+    </div>
+</div>
+
+<div class="controls">
+    <label>Interval</label>
+    <select id="intervalSelect">
+        <option value="250">250ms</option>
+        <option value="500" selected>500ms</option>
+        <option value="1000">1s</option>
+        <option value="2000">2s</option>
+    </select>
+
+    <button id="startButton" class="start">Start</button>
+</div>
+
+<script>
+const video = document.getElementById('videoFeed');
+const canvas = document.getElementById('canvas');
+const baseURL = document.getElementById('baseURL');
+const instructionText = document.getElementById('instructionText');
+const responseText = document.getElementById('responseText');
+const intervalSelect = document.getElementById('intervalSelect');
+const startButton = document.getElementById('startButton');
+
+let stream = null;
+let intervalId = null;
+let isProcessing = false;
+
+/* ------------------ API ------------------ */
+
+async function sendChatCompletionRequest(instruction, imageBase64URL) {
+    const response = await fetch(`${baseURL.value}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            max_tokens: 120,
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: instruction },
+                        { type: 'image_url', image_url: { url: imageBase64URL } }
+                    ]
+                }
+            ]
+        })
+    });
+
+    if (!response.ok) {
+        return `Server error: ${response.status}`;
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+/* ------------------ Screen Capture ------------------ */
+
+async function initScreenCapture() {
+    try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+                frameRate: 30,
+                cursor: "always"
+            },
+            audio: false
+        });
+
+        video.srcObject = stream;
+        responseText.value = "✅ Screen capture ready. Select your MAIN screen.";
+
+        // 用户点击“停止共享”
+        stream.getVideoTracks()[0].addEventListener('ended', () => {
+            handleStop();
+            responseText.value = "🛑 Screen sharing stopped by user.";
+        });
+
+    } catch (err) {
+        alert("Screen permission denied.");
+        console.error(err);
+    }
+}
+
+/* ------------------ Frame Capture ------------------ */
+
+function captureImage() {
+    if (!video.videoWidth) return null;
+
+    const maxWidth = 1280;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+/* ------------------ Loop ------------------ */
+
+async function sendData() {
+    if (!isProcessing) return;
+
+    const img = captureImage();
+    if (!img) return;
+
+    try {
+        const res = await sendChatCompletionRequest(
+            instructionText.value,
+            img
+        );
+        responseText.value = res;
+    } catch (e) {
+        responseText.value = e.message;
+    }
+}
+
+/* ------------------ Controls ------------------ */
+
+function handleStart() {
+    if (!stream) {
+        alert("Start screen sharing first.");
+        return;
+    }
+
+    isProcessing = true;
+    startButton.textContent = "Stop";
+    startButton.className = "stop";
+    instructionText.disabled = true;
+    intervalSelect.disabled = true;
+
+    sendData();
+    intervalId = setInterval(sendData, Number(intervalSelect.value));
+}
+
+function handleStop() {
+    isProcessing = false;
+    clearInterval(intervalId);
+    intervalId = null;
+
+    startButton.textContent = "Start";
+    startButton.className = "start";
+    instructionText.disabled = false;
+    intervalSelect.disabled = false;
+}
+
+startButton.onclick = () => {
+    isProcessing ? handleStop() : handleStart();
+};
+
+window.addEventListener('DOMContentLoaded', initScreenCapture);
+window.addEventListener('beforeunload', () => {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+});
+</script>
+
+</body>
+</html>
