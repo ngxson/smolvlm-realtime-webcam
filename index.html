@@ -5,102 +5,210 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Camera Interaction App</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: sans-serif;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            background-color: #fafafa;
+            color: #2d2d2d;
+            line-height: 1.6;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 20px;
-            padding: 20px;
-            background-color: #f0f0f0;
+            padding: 2rem 1rem;
         }
-        .controls, .io-areas {
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            text-align: center;
+            color: #1a1a1a;
+            letter-spacing: -0.02em;
+        }
+
+        .video-container {
+            margin-bottom: 2rem;
             display: flex;
-            gap: 10px;
-            align-items: center;
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            justify-content: center;
         }
-        .io-areas {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        textarea {
-            width: 300px;
-            height: 80px;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-        }
+
         #videoFeed {
-            width: 480px;
-            height: 360px;
-            border: 2px solid #333;
+            width: 640px;
+            height: 480px;
+            border: 3px solid #2d2d2d;
             background-color: #000;
-            border-radius: 8px;
+            display: block;
         }
-        #startButton {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            color: white;
+
+        .io-section {
+            margin-bottom: 2rem;
         }
-        #startButton.start {
-            background-color: #28a745; /* Green */
+
+        .input-group {
+            margin-bottom: 1.5rem;
         }
-        #startButton.stop {
-            background-color: #dc3545; /* Red */
-        }
+
         label {
-            font-weight: bold;
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #2d2d2d;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
+
+        input[type="text"],
+        textarea,
         select {
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #2d2d2d;
+            background-color: #fff;
+            color: #2d2d2d;
+            font-family: inherit;
+            font-size: 0.875rem;
+            line-height: 1.4;
+            resize: vertical;
+            transition: border-color 0.2s ease;
         }
+
+        input[type="text"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #000;
+        }
+
+        textarea {
+            min-height: 3rem;
+            max-height: 8rem;
+        }
+
+        textarea[readonly] {
+            background-color: #f5f5f5;
+            color: #666;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+            margin-bottom: 2rem;
+        }
+
+        .control-group {
+            flex: 1;
+        }
+
+        #startButton {
+            padding: 0.75rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 2px solid #2d2d2d;
+            background-color: #2d2d2d;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+
+        #startButton:hover {
+            background-color: #1a1a1a;
+            border-color: #1a1a1a;
+        }
+
+        #startButton:active {
+            transform: translateY(1px);
+        }
+
+        #startButton.stop {
+            background-color: #fff;
+            color: #2d2d2d;
+        }
+
+        #startButton.stop:hover {
+            background-color: #fafafa;
+        }
+
         .hidden {
             display: none;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            
+            #videoFeed {
+                width: 100%;
+                max-width: 480px;
+                height: 360px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            #startButton {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
+    <div class="container">
+        <h1>Camera Interaction App</h1>
 
-    <h1>Camera Interaction App</h1>
-
-    <video id="videoFeed" autoplay playsinline></video>
-    <canvas id="canvas" class="hidden"></canvas> <!-- For capturing frames -->
-
-    <div class="io-areas">
-        <div>
-            <label for="baseURL">Base API:</label><br>
-            <input id="baseURL" name="Instruction" value="http://localhost:8080"></textarea>
+        <div class="video-container">
+            <video id="videoFeed" autoplay playsinline></video>
         </div>
-        <div>
-            <label for="instructionText">Instruction:</label><br>
-            <textarea id="instructionText" style="height: 2em; width: 40em" name="Instruction"></textarea>
-        </div>
-        <div>
-            <label for="responseText">Response:</label><br>
-            <textarea id="responseText" style="height: 2em; width: 40em" name="Response" readonly placeholder="Server response will appear here..."></textarea>
-        </div>
-    </div>
+        <canvas id="canvas" class="hidden"></canvas>
 
-    <div class="controls">
-        <label for="intervalSelect">Interval between 2 requests:</label>
-        <select id="intervalSelect" name="Interval between 2 requests">
-            <option value="100">100ms</option>
-            <option value="250">250ms</option>
-            <option value="500" selected>500ms</option>
-            <option value="1000">1s</option>
-            <option value="2000">2s</option>
-        </select>
-        <button id="startButton" class="start">Start</button>
+        <div class="io-section">
+            <div class="input-group">
+                <label for="baseURL">Base API</label>
+                <input type="text" id="baseURL" value="http://localhost:8080" />
+            </div>
+            <div class="input-group">
+                <label for="instructionText">Instruction</label>
+                <textarea id="instructionText" placeholder="e.g., 'What do you see?' or 'Count the objects' or 'What color is this?'"></textarea>
+            </div>
+            <div class="input-group">
+                <label for="responseText">Response</label>
+                <textarea id="responseText" readonly placeholder="Server response will appear here..."></textarea>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="intervalSelect">Interval</label>
+                <select id="intervalSelect">
+                    <option value="100">100ms</option>
+                    <option value="250">250ms</option>
+                    <option value="500" selected>500ms</option>
+                    <option value="1000">1s</option>
+                    <option value="2000">2s</option>
+                    <option value="5000">5s</option>
+                </select>
+            </div>
+            <button id="startButton" class="start">Start</button>
+        </div>
     </div>
 
     <script>
@@ -112,11 +220,35 @@
         const intervalSelect = document.getElementById('intervalSelect');
         const startButton = document.getElementById('startButton');
 
-        instructionText.value = "What do you see?"; // default instruction
+        instructionText.value = "What do you see?"; // Simple, direct default instruction
 
         let stream;
         let intervalId;
         let isProcessing = false;
+
+        // Function to simplify and make responses more direct
+        function simplifyResponse(response) {
+            // Remove unnecessary filler words and make it concise
+            let simplified = response
+                .replace(/^(I can see|I see|I notice|I observe|It appears|It looks like|There is|There are)\s*/i, '')
+                .replace(/\s+(that|which|who)\s+is\s+/gi, ' is ')
+                .replace(/\s+and\s+it\s+(looks|appears|seems)\s+/gi, ' ')
+                .replace(/\s*\.*\s*in\s+the\s+image\s*/gi, '')
+                .replace(/\s*\.*\s*in\s+this\s+photo\s*/gi, '')
+                .replace(/\s*\.*\s*in\s+the\s+photo\s*/gi, '')
+                .replace(/\s*\.*\s*in\s+the\s+picture\s*/gi, '')
+                .trim();
+            
+            // Capitalize first letter
+            simplified = simplified.charAt(0).toUpperCase() + simplified.slice(1);
+            
+            // Remove trailing periods for very short responses
+            if (simplified.length < 50 && simplified.endsWith('.')) {
+                simplified = simplified.slice(0, -1);
+            }
+            
+            return simplified;
+        }
 
         // Returns response text (string)
         async function sendChatCompletionRequest(instruction, imageBase64URL) {
@@ -126,8 +258,9 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    max_tokens: 100,
+                    max_tokens: 50, // Reduced from 100 for more concise responses
                     messages: [
+                        { role: 'system', content: 'You are a direct and concise visual assistant. Provide brief, factual answers without filler words or unnecessary explanations. Be specific and to the point.' },
                         { role: 'user', content: [
                             { type: 'text', text: instruction },
                             { type: 'image_url', image_url: {
@@ -142,7 +275,8 @@
                 return `Server error: ${response.status} - ${errorData}`;
             }
             const data = await response.json();
-            return data.choices[0].message.content;
+            const rawResponse = data.choices[0].message.content;
+            return simplifyResponse(rawResponse);
         }
 
         // 1. Ask for camera permission on load
